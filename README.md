@@ -1,2 +1,2 @@
 # largeviz
-implenation of largeviz
+implentation of largeviz
