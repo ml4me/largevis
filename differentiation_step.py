@@ -14,7 +14,7 @@ def vect_length(m):
     return np.linalg.norm(m, axis=1).reshape(-1, 1)
 
 def square_vect_length(m):
-    return np.power(vect_length(m), 2)
+    return np.power(m, 2).sum()
 
 def dist(x, y):
     return vect_length(x-y)
@@ -41,7 +41,7 @@ def calculate_sigma_and_pjis_for_fixed_xi(square_dists, perplexity = 50, toleran
     def to_minimize(s):  # actually learns 2*sigma^2
         p_jis = pjis_from(s, square_dists)
         return np.power(perplexity - (np.sum(np.log2(p_jis)) / len(square_dists)), 2)
-    sigma=minimize(to_minimize, 5, tol=tolerance, bounds=(0, 100000), options={'maxiter':1000}).x
+    sigma=minimize(to_minimize, 5, tol=tolerance, options={'maxiter':1000}).x
     result = np.sqrt(sigma) / 2
     pji_values = pjis_from(sigma, square_dists)
     return result, pji_values
@@ -49,14 +49,14 @@ def calculate_sigma_and_pjis_for_fixed_xi(square_dists, perplexity = 50, toleran
 
 # Derivative stuff
 
-num_pts = 1000
+num_pts = 500
 num_batches = 10000
-batch_size = 50
+batch_size = 10
 init_learning_rate = 1000.0
 gamma = 7
-num_corruptions = 5
+num_corruptions = 10
 output_dim = 2
-num_nns = 10
+num_nns = 2
 
 
 # input (probably not most efficient way of doing this, but it's not meant to last):
@@ -65,23 +65,20 @@ def shifted(n):
     return range(n, num_pts)+range(n)
 
 ### CIRCLE:
-link_data = [np.array(range(num_pts)*num_nns), np.array([x for i in range(num_nns) for x in shifted(i+1)])]
-link_distances = np.concatenate([(1+i)*np.ones(num_pts) for i in range(num_nns)])
+#link_data = [np.array(range(num_pts)*num_nns), np.array([x for i in range(num_nns) for x in shifted(i+1)])]
+#link_distances = np.concatenate([(1+i)*np.ones(num_pts) for i in range(num_nns)])
 
 ### LINE:
-#link_data = [np.array(range(num_pts-1)), np.array(range(1, num_pts))]
-#link_distances = np.ones(num_pts-1)
+link_data = [np.array(range(num_pts-1)), np.array(range(1, num_pts))]
+link_distances = np.ones(num_pts-1)
 
-print len(link_data[0])
-print len(link_data[1])
-print len(link_distances)
 no_skip = 0
 
 # computed once from input:
 sigmas, pjis = calculate_all_sigmas_and_pjis(link_data[0], link_data[1], link_distances)
 sigma2s, pijs = calculate_all_sigmas_and_pjis(link_data[1], link_data[0], link_distances)
 # print sigmas
-probabilities = softmax(pjis*pijs / (2*num_pts))
+probabilities = softmax(pjis*pijs / (2.0*num_pts))
 hist = np.histogram(np.power(np.concatenate([link_data[0], link_data[1]]), 0.75), num_pts)[0]
 negative_sample_probabilities = softmax(hist)
 
@@ -89,28 +86,17 @@ embeddings = np.random.randn(num_pts, output_dim)
 num_links = link_data[0].size
 
 def positive_gradient(x, y):
-#     diff = x-y
-#     diff_square_norm = square_vect_length(diff)
-#     x_grad = 2*diff_square_norm*diff/(1+diff_square_norm)
-    dist_ij = square_dist(x, y)
-    p_ij = 1.0/(1+dist_ij)
-    d_dist_ij = (x-y)/np.sqrt(0.001 + dist_ij)
-    d_p_ij = d_dist_ij * (-2) * dist_ij / np.power(1+dist_ij, 2)
-#     return (-x_grad, x_grad)
-    d_j = (1/p_ij) * d_p_ij
-    return ( d_j, -d_j)
+    diff = x-y
+    diff_square_norm = square_vect_length(diff)
+    x_grad = -2*diff/(1+diff_square_norm)
+    return (x_grad, -x_grad)
 
 def negative_gradient(x, z):
-    dist_ik = square_dist(x, z)
-    d_dist_ik = (x-z) / np.sqrt(0.001 + dist_ik)
-    p_ik = 1 - (1.0/(1+dist_ik))
-    d_p_ik = d_dist_ik * 2 * dist_ik / np.power(1 + dist_ik, 2)
-    d_k = (gamma/p_ik) * d_p_ik
-    return (d_k, -d_k)
-#     diff = x-z
-#     diff_square_norm = square_vect_length(diff)
-#     x_grad = gamma*2*diff_square_norm*diff/(0.001+diff_square_norm*(1+diff_square_norm))
-#     return (x_grad, -x_grad)
+    diff = x-z
+    diff_square_norm = square_vect_length(diff)
+    x_grad = gamma*2*diff/(0.001+diff_square_norm*(1+diff_square_norm))
+    x_grad = np.clip(x_grad, -1, 1)
+    return (x_grad, -x_grad)
 
 def update(embs, positions, updates):
     embs[positions, :] -= updates
