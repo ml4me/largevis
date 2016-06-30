@@ -79,7 +79,7 @@ sigmas, pjis = calculate_all_sigmas_and_pjis(link_data[0], link_data[1], link_di
 sigma2s, pijs = calculate_all_sigmas_and_pjis(link_data[1], link_data[0], link_distances)
 # print sigmas
 probabilities = softmax(pjis*pijs / (2.0*num_pts))
-hist = np.histogram(np.power(np.concatenate([link_data[0], link_data[1]]), 0.75), num_pts)[0]
+hist = np.power(np.histogram(np.concatenate([link_data[0], link_data[1]]), num_pts)[0], 0.75)
 negative_sample_probabilities = softmax(hist)
 
 embeddings = np.random.randn(num_pts, output_dim)
