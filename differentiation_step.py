@@ -3,6 +3,7 @@ from scipy.optimize import minimize
 from random import getrandbits
 import matplotlib.pyplot as plt
 
+#ddtype = 'float64'
 
 # Helper functions.
 def softmax(x):
@@ -22,41 +23,70 @@ def dist(x, y):
 def square_dist(x, y):
     return square_vect_length(x-y)
 
-# calculation of the sigmas: xis, yis, and dists are assumed to be aligned 
-# numpy arrays of indices and distances. 
-def calculate_all_sigmas_and_pjis(xis, yis, dists, perplexity = 50, tolerance = 0.001):
-    max_xi = np.max(xis)
+# calculation of the sigmas: xis, yis, and dists are assumed to be aligned
+# numpy arrays of indices and distances.
+def calculate_pjis(xis, yis, dists, perplexity = 50, tolerance = 0.001):
+    max_xi = int(np.max(xis))
     sigmas = np.zeros(max_xi+1)
     pjis = np.zeros_like(xis, dtype='float')
     for xi in range(max_xi+1):
         matches = (xis == xi)
         sigmas[xi], pjis[matches] = calculate_sigma_and_pjis_for_fixed_xi(np.power(dists[matches], 2), perplexity, tolerance)
-    return sigmas, pjis
-    
+    return pjis
+
+def wijs_from(pijs, xis, yis, N):
+    from scipy import sparse
+    half_wijs = sparse.coo_matrix((pijs, (xis, yis)), shape=(N, N))
+    return (half_wijs.tocsc() + half_wijs.tocoo().transpose()) / (2 * N)
+
 def pjis_from(sigma, square_dists):
     exps = np.exp(-square_dists / sigma)
     return exps / np.sum(exps)
 
+#init_values = np.array(range(0, 200), dtype=ddtype) / 20
 def calculate_sigma_and_pjis_for_fixed_xi(square_dists, perplexity = 50, tolerance = 0.001):
     def to_minimize(s):  # actually learns 2*sigma^2
-        p_jis = pjis_from(s, square_dists)
-        return np.power(perplexity - (np.sum(np.log2(p_jis)) / len(square_dists)), 2)
-    sigma=minimize(to_minimize, 5, tol=tolerance, options={'maxiter':1000}).x
-    result = np.sqrt(sigma) / 2
+        exps = np.exp(-square_dists / (2*np.power(s, 2)))
+        p_jis = exps / np.sum(exps)
+        if np.any(np.isnan(p_jis)):
+            print "Nans found in pjis"
+            print "s:", s
+            print "Square dist info:", np.min(square_dists), np.max(square_dists)
+            print "Exp info:", np.min(exps), np.max(exps)
+        return np.power(perplexity + (np.sum(np.log2(p_jis)) / len(square_dists)), 2)
+    #quick_min = np.vectorize(to_minimize)
+    #init_idx = np.argmin(quick_min(init_values))
+    #sigma = minimize(to_minimize, init_values[init_idx], tol=tolerance, options={'maxiter': 1000}).x
+    starts = [0.5, 0.05, 0.1, 1, 0.001, 10, 20]
+    for i, start in enumerate(starts):
+        sigma = minimize(to_minimize, start, method="Nelder-Mead", tol=tolerance, options={'maxiter': 1000}).x
+        if np.any(np.isnan(sigma)):
+            print "Found nans in sigma"
+            if i == len(starts) - 1:
+                import sys
+                sys.exit()
+        elif np.any(np.isinf(sigma)):
+            print "Found infinities in sigma"
+            if i == len(starts) - 1:
+                import sys
+                sys.exit()
+        else:
+            break
+    #result = np.sqrt(sigma) / 2
     pji_values = pjis_from(sigma, square_dists)
-    return result, pji_values
+    return sigma, pji_values
 
 
 # Derivative stuff
 
-num_pts = 500
+num_pts = 1000
 num_batches = 10000
 batch_size = 10
 init_learning_rate = 1000.0
 gamma = 7
 num_corruptions = 10
 output_dim = 2
-num_nns = 2
+num_nns = 50
 
 
 # input (probably not most efficient way of doing this, but it's not meant to last):
@@ -69,16 +99,28 @@ def shifted(n):
 #link_distances = np.concatenate([(1+i)*np.ones(num_pts) for i in range(num_nns)])
 
 ### LINE:
-link_data = [np.array(range(num_pts-1)), np.array(range(1, num_pts))]
-link_distances = np.ones(num_pts-1)
+#link_data = [np.array(range(num_pts-1)), np.array(range(1, num_pts))]
+#link_distances = np.ones(num_pts-1)
+
+### MNIST SAMPLE:
+import pickle
+p1, p2, link_distances = pickle.load(open("/home/temerick/mnist_subset_data.pkl", "r"))
+#p1.dtype = ddtype
+#p2.dtype = ddtype
+#link_distances.dtype = ddtype
+link_data = [p1, p2]
+link_distances *= (10.0 / link_distances.max())
+print "max distance:", link_distances.max()
+print "min distance:", link_distances.min()
 
 no_skip = 0
 
 # computed once from input:
-sigmas, pjis = calculate_all_sigmas_and_pjis(link_data[0], link_data[1], link_distances)
-sigma2s, pijs = calculate_all_sigmas_and_pjis(link_data[1], link_data[0], link_distances)
-# print sigmas
-probabilities = softmax(pjis*pijs / (2.0*num_pts))
+pjis = calculate_pjis(link_data[0], link_data[1], link_distances)
+wijs = wijs_from(pjis, link_data[0], link_data[1], num_pts)
+flattened_wijs = wijs[link_data[0], link_data[1]]
+
+probabilities = softmax(np.array(flattened_wijs).reshape(-1))
 hist = np.power(np.histogram(np.concatenate([link_data[0], link_data[1]]), num_pts)[0], 0.75)
 negative_sample_probabilities = softmax(hist)
 
@@ -107,7 +149,7 @@ for batch_no in range(num_batches):
         break
     learning_rate = (init_learning_rate*(num_batches-batch_no)/num_batches)/batch_size
     true_batch = np.random.choice(num_links, size=batch_size, p=probabilities)
-    
+
     # for each batch, (x, y)'s are true pairs and (?, z)'s are corruptions
     x_locations = link_data[0][true_batch]
     y_locations = link_data[1][true_batch]
@@ -134,12 +176,12 @@ for batch_no in range(num_batches):
                 z_grads.append(z_grad)
                 x_grads += x_corr_grads
                 no_skip += 1
-            
+
     update(embeddings, x_locations, learning_rate * x_grads)
     update(embeddings, y_locations, learning_rate * y_grads)
     for corruption, z_grad in zip(corruptions, z_grads):
         update(embeddings, corruption, learning_rate * z_grad)
-    
+
     if batch_no % 5000 == 0:
         print "Finished batch "+str(batch_no)
 
