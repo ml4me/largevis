@@ -5,9 +5,9 @@ from heapq import heappush, heappop, heappushpop, nsmallest
 
 np.random.seed(42)
 def lvnn(fp, nt=3, k=5, iter= 10, leaves=50):
-    
+
     nn=np.zeros((fp.shape[0],k))-1
-    
+
     print(' start Tree build')
     model = RPForest(leaf_size=leaves, no_trees=nt)
     model.fit(fp)
@@ -37,5 +37,5 @@ fp = np.random.randn(1000,10)
 from sklearn.neighbors import NearestNeighbors
 
 neigh = NearestNeighbors(2, 0.4)
-neigh.fit(fp) 
+neigh.fit(fp)
 neigh.kneighbors([[0, 0, 1.3]], 2, return_distance=False)

@@ -80,8 +80,8 @@ def calculate_sigma_and_pjis_for_fixed_xi(square_dists, perplexity = 50, toleran
 # Derivative stuff
 
 num_pts = 1000
-num_batches = 10000
-batch_size = 10
+num_batches = 50000
+batch_size = 1
 init_learning_rate = 1000.0
 gamma = 7
 num_corruptions = 10
@@ -95,20 +95,20 @@ def shifted(n):
     return range(n, num_pts)+range(n)
 
 ### CIRCLE:
-#link_data = [np.array(range(num_pts)*num_nns), np.array([x for i in range(num_nns) for x in shifted(i+1)])]
-#link_distances = np.concatenate([(1+i)*np.ones(num_pts) for i in range(num_nns)])
+link_data = [np.array(range(num_pts)*num_nns), np.array([x for i in range(num_nns) for x in shifted(i+1)])]
+link_distances = np.concatenate([(1+i)*np.ones(num_pts) for i in range(num_nns)])
 
 ### LINE:
 #link_data = [np.array(range(num_pts-1)), np.array(range(1, num_pts))]
 #link_distances = np.ones(num_pts-1)
 
 ### MNIST SAMPLE:
-import pickle
-p1, p2, link_distances = pickle.load(open("/home/temerick/mnist_subset_data.pkl", "r"))
+#import pickle
+#p1, p2, link_distances = pickle.load(open("/home/temerick/mnist_subset_data.pkl", "r"))
 #p1.dtype = ddtype
 #p2.dtype = ddtype
 #link_distances.dtype = ddtype
-link_data = [p1, p2]
+#link_data = [p1, p2]
 link_distances *= (10.0 / link_distances.max())
 print "max distance:", link_distances.max()
 print "min distance:", link_distances.min()
