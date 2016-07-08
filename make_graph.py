@@ -6,7 +6,7 @@ from heapq import nsmallest
 np.random.seed(42)
 
 
-def lvnn(fp, nt=3, k=5, iter=5, leaves=50):
+def lvnn(fp, nt=3, k=150, iters=5, leaves=50):
 
     nn = np.zeros((fp.shape[0], k, 2)) - 1
 
@@ -17,7 +17,7 @@ def lvnn(fp, nt=3, k=5, iter=5, leaves=50):
         nn[i, :, 0] = model.query(fp[i, ], k)
 
     t = 0
-    while t < iter:
+    while t < iters:
         t += 1
         old_nn = nn
         for i in range(0, fp.shape[0]):
