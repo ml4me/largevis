@@ -84,29 +84,27 @@ def pjis_from(sigma, square_dists):
 
 
 def calculate_sigma_and_pjis_for_fixed_xi(square_dists, perplexity=50,
-                                          tolerance=0.001):
+                                          tolerance=1e-5):
     def to_minimize(s):  # actually learns 2*sigma^2
         exps = np.exp(-square_dists / (2*np.power(s, 2)))
         p_jis = exps / np.sum(exps)
-        if np.any(np.isnan(p_jis)):
-            print "Nans found in pjis"
-            print "s:", s
-            print "Sq dist info:", np.min(square_dists), np.max(square_dists)
-            print "Exp info:", np.min(exps), np.max(exps)
-        return np.power(
-            perplexity + (np.sum(np.log2(p_jis)) / len(square_dists)), 2)
-    starts = [0.5, 0.05, 0.1, 1, 0.001, 10, 20]
-    for i, start in enumerate(starts):
-        sigma = minimize(to_minimize, start, method="Nelder-Mead",
-                         tol=tolerance, options={'maxiter': 1000}).x
+        return np.abs(perplexity + np.sum(np.log2(p_jis)))
+
+    starts = [0.5, 0.05, 0.1, 1.0, 0.001, 10.0, 20.0]
+    start_values = map(to_minimize, starts)
+    sorted_idxs = sorted(range(len(start_values)), key=start_values.__getitem__)
+
+    for i, idx in enumerate(sorted_idxs):
+        sigma = minimize(to_minimize, starts[idx], method="Nelder-Mead",
+                         tol=tolerance, options={'maxiter': 200}).x
         if np.any(np.isnan(sigma)):
-            print "Found nans in sigma"
             if i == len(starts) - 1:
+                print "Found nans in sigma"
                 import sys
                 sys.exit()
         elif np.any(np.isinf(sigma)):
-            print "Found infinities in sigma"
             if i == len(starts) - 1:
+                print "Found infinities in sigma"
                 import sys
                 sys.exit()
         else:
@@ -124,7 +122,8 @@ def sgd(data, num_batches=50000, batch_size=1, init_learning_rate=1.0,
     link_data = [data[:, 0], data[:, 1]]
     link_distances = data[:, 2]
 
-    link_distances *= (10.0 / link_distances.max())
+    print "max link distance:", np.max(link_distances)
+    link_distances /= np.max(link_distances)
     print "max distance:", link_distances.max()
     print "min distance:", link_distances.min()
 
@@ -159,7 +158,7 @@ def sgd(data, num_batches=50000, batch_size=1, init_learning_rate=1.0,
         diff = x-z
         diff_square_norm = square_vect_length(diff)
         x_grad = gamma*2*diff/(0.001+diff_square_norm*(1+diff_square_norm))
-        x_grad = np.clip(x_grad, -1, 1)
+        x_grad = np.clip(x_grad, -5.0, 5.0)
         return (x_grad, -x_grad)
 
     def update(embs, positions, updates):
@@ -168,7 +167,8 @@ def sgd(data, num_batches=50000, batch_size=1, init_learning_rate=1.0,
     for batch_no in range(num_batches):
         if np.any(np.isnan(embeddings)):
             print "found nans at batch", batch_no
-            break
+            import sys
+            sys.exit()
         learning_rate = init_learning_rate*(num_batches-batch_no)/num_batches
         true_batch = \
             np.random.choice(num_links, size=batch_size, p=probabilities)

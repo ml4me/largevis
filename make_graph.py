@@ -19,6 +19,7 @@ def lvnn(fp, nt=3, k=150, iters=5, leaves=50):
     t = 0
     while t < iters:
         t += 1
+        print "Starting iter", t
         old_nn = nn
         for i in range(0, fp.shape[0]):
             h = set()
