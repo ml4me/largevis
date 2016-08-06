@@ -90,25 +90,28 @@ def calculate_sigma_and_pjis_for_fixed_xi(square_dists, perplexity=50,
         p_jis = exps / np.sum(exps)
         return np.abs(perplexity + np.sum(np.log2(p_jis)))
 
-    starts = [0.5, 0.05, 0.1, 1.0, 0.001, 10.0, 20.0]
-    start_values = map(to_minimize, starts)
-    sorted_idxs = sorted(range(len(start_values)), key=start_values.__getitem__)
-
-    for i, idx in enumerate(sorted_idxs):
-        sigma = minimize(to_minimize, starts[idx], method="Nelder-Mead",
-                         tol=tolerance, options={'maxiter': 200}).x
-        if np.any(np.isnan(sigma)):
-            if i == len(starts) - 1:
-                print "Found nans in sigma"
-                import sys
-                sys.exit()
-        elif np.any(np.isinf(sigma)):
-            if i == len(starts) - 1:
-                print "Found infinities in sigma"
-                import sys
-                sys.exit()
-        else:
-            break
+    sigma = minimize(to_minimize, 1.0, method="Nelder-Mead",
+                     tol=tolerance, options={'maxiter': 200}).x
+    #
+    # starts = [0.5, 0.05, 0.1, 1.0, 0.001, 10.0, 20.0]
+    # start_values = map(to_minimize, starts)
+    # sorted_idxs = sorted(range(len(start_values)), key=start_values.__getitem__)
+    #
+    # for i, idx in enumerate(sorted_idxs):
+    #     sigma = minimize(to_minimize, starts[idx], method="Nelder-Mead",
+    #                      tol=tolerance, options={'maxiter': 200}).x
+    #     if np.any(np.isnan(sigma)):
+    #         if i == len(starts) - 1:
+    #             print "Found nans in sigma"
+    #             import sys
+    #             sys.exit()
+    #     elif np.any(np.isinf(sigma)):
+    #         if i == len(starts) - 1:
+    #             print "Found infinities in sigma"
+    #             import sys
+    #             sys.exit()
+    #     else:
+    #         break
     # result = np.sqrt(sigma) / 2
     pji_values = pjis_from(sigma, square_dists)
     return sigma, pji_values
@@ -135,12 +138,11 @@ def sgd(data, num_batches=50000, batch_size=1, init_learning_rate=1.0,
     flattened_wijs = wijs[link_data[0], link_data[1]]
 
     probabilities = softmax(np.array(flattened_wijs).reshape(-1))
-    hist = np.power(
-        np.histogram(
-            np.concatenate([link_data[0], link_data[1]]), num_pts
-        )[0],
-        0.75)
-    negative_sample_probabilities = softmax(hist)
+    items, counts = np.unique(
+        np.concatenate([link_data[0], link_data[1]]),
+        return_counts=True
+    )
+    negative_sample_probabilities = softmax(np.power(counts, 0.75))
 
     if init is not None:
         embeddings = init
