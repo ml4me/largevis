@@ -26,7 +26,7 @@ def lvnn(fp, nt=3, k=5, iter= 2, leaves=50):
             li = old_nn[ji,:]
             jli = np.unique(li.flatten())
             jli = jli[(jli != i)]
-            d=np.linalg.norm(fp [i,:]-fp [jli,:], axis=1)
+            d=np.linalg.norm(fp [i,:]- np.take(fp, jli, axis=0), axis=1)
             d_idxs = np.argsort(d)[:k]
             # try:
             nn [i,:]=jli[d_idxs]
